@@ -14,8 +14,6 @@ $os2
 $n = Get-WmiObject win32_NetworkAdapter
 $nc = Get-WmiObject win32_NetworkAdapterConfiguration
 
-
-## Get unique counters
 #((Get-Counter '\Network Interface(*)\*').CounterSamples | gu)
 $c = (((Get-Counter '\Network Interface(*)\*').CounterSamples | % {$_.InstanceName}) | gu)
 
@@ -34,11 +32,10 @@ Get-WmiObject Win32_PerfRawData_Tcpip_NetworkInterface | Select-Object -Property
 
 (Get-WmiObject Win32_PerfRawData_Tcpip_NetworkInterface | Select-Object Name) |%{$_.Name -like '*isatap.*'}
 
-(Get-WmiObject -Query 'select * from Win32_PerfRawData_Tcpip_NetworkInterface where Name like "%isatap%"')
+(Get-WmiObject -Query 'select * from Win32_PerfRawData_Tcpip_NetworkInterface where Name like "%7F0E2084-C9A6-46CB-B1B5-83B8E54627DE%"')
 
 
 
-## Get all Win32_network counter types
 Clear-Host 
 $i=0 
 $Type = "Win32_network" 
@@ -56,15 +53,60 @@ Get-WmiObject -Query "Select * from win32_NetworkAdapterConfiguration" |Format-L
 
 
 
+
 $a = (Get-WmiObject -Query "Select GUID, Name, Description, Caption, DeviceID, Index, InterfaceIndex, ProductName, NetConnectionID from win32_NetworkAdapter") 
 
 $b = (Get-WmiObject -Query "Select SettingID, Description, Caption, Index, InterfaceIndex, ServiceName from win32_NetworkAdapterConfiguration")
 
+#$cn = (((Get-Counter '\Network Adapter(*)\*').CounterSamples | % {$_.InstanceName}) | gu)
 
-## Get NetAdapter from register
+
+
 $path = "HKLM:\SYSTEM\CurrentControlSet\Control\Class\" +
         "{4D36E972-E325-11CE-BFC1-08002BE10318}"
 Get-Childitem $path -ErrorAction SilentlyContinue | Foreach {$_, '------------'}
 
 
 get-childitem 'HKLM:\SYSTEM\CurrentControlSet\Services\Blfp\Parameters\Adapters'| foreach-object {get-itemproperty $_.pspath}
+
+-----------------------------------------------------------------------------------
+
+$ver2012 = (Get-WmiObject win32_OperatingSystem).Name -like '*2012*'
+function replace_unallowed($s)
+{ # http://msdn.microsoft.com/en-us/library/vstudio/system.diagnostics.performancecounter.instancename
+    $s.replace("(", '[').replace(')', ']').replace('#', '_').replace('\', '_').replace('/', '_').toLower()
+}
+if($ver2012){
+    (Get-Counter '\Network Adapter(*)\*').CounterSamples | `
+    % {$_.InstanceName} | gu | % {
+        foreach($na in (Get-WmiObject MSFT_NetAdapter -Namespace 'root/StandardCimv2')) {
+            if($_ -eq (replace_unallowed $na.InterfaceDescription) -or $_ -like "*$($na.DeviceID)*") {
+                $na.Name, '--', $na.DeviceID, ':', $_, '|'
+            }}}}
+
+
+
+--------------------------------------------------------------------------------
+
+$ver2012 = (Get-WmiObject win32_OperatingSystem).Name -like '*2012*'
+function replace_unallowed($s)
+{ # http://msdn.microsoft.com/en-us/library/vstudio/system.diagnostics.performancecounter.instancename
+    $s.replace("(", '[').replace(')', ']').replace('#', '_').replace('\', '_').replace('/', '_').toLower()
+}
+if($ver2012){
+(
+    (Get-Counter '\Network Interface(*)\*').CounterSamples | `
+    % {$_.InstanceName} | gu | % {
+        foreach($na in (Get-WmiObject MSFT_NetAdapter -Namespace 'root/StandardCimv2')) {
+            if($_ -eq (replace_unallowed $na.InterfaceDescription) -or $_ -like "*$($na.DeviceID)*") {
+                Write-Host $_, ':', $na.DeviceID
+            }
+        }
+        foreach($na in (Get-WmiObject win32_NetworkAdapterConfiguration)) {
+            if($_ -eq (replace_unallowed $na.Description) -or $_ -like "*$($na.SettingID)*") {
+                Write-Host $_, ':', $na.SettingID
+            }
+        }
+})
+
+}
